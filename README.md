@@ -1,0 +1,169 @@
+# Asset Lifecycle Tracker
+
+Sistema de trazabilidad de activos tecnológicos con detección automática de inconsistencias y clasificación por IA.
+
+## Contexto del problema
+
+La empresa gestiona laptops, handhelds, tablets e impresoras que pasan por estados: `In Stock → In Transit → In Use → Repair`. Actualmente existen:
+
+- Activos "fantasma" en tránsito por meses sin actualización
+- Estado en `assets.csv` desincronizado con `status_history`
+- Ubicaciones registradas que no coinciden con el último movimiento
+- Activos en uso sin responsable asignado
+- Garantías vencidas con activos aún operando
+
+**Resultado del análisis sobre el dataset**: 333 inconsistencias en 120 activos, con USD 219,865 en riesgo.
+
+---
+
+## Arquitectura de la solución
+
+```
+data/               ← CSVs de entrada (assets, status_history, movements)
+scripts/
+  diagnosis.py      ← Análisis + detección de inconsistencias (Python + pandas)
+  ai_analysis.py    ← Clasificación y priorización con Claude AI
+reports/            ← JSONs generados (diagnosis_report, ai_analysis_report)
+n8n/
+  workflow.json     ← Workflow de automatización (importable en n8n)
+```
+
+### Flujo de datos
+
+```
+CSV files → diagnosis.py → diagnosis_report.json
+                                    ↓
+                          ai_analysis.py → ai_analysis_report.json
+                                    ↓
+                         n8n workflow (cron diario)
+                                    ↓
+                    ¿Hay issues CRÍTICOS? → Alerta Slack
+```
+
+---
+
+## Requisitos
+
+- Python 3.9+
+- `pip install -r requirements.txt`
+- API key de Anthropic: `export ANTHROPIC_API_KEY=sk-ant-...`
+- n8n (local o cloud) para el workflow de automatización
+
+---
+
+## Cómo ejecutar
+
+### 1. Instalar dependencias
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Ejecutar diagnóstico (sin API key)
+
+```bash
+python3 scripts/diagnosis.py
+# → genera reports/diagnosis_report.json
+```
+
+### 3. Ejecutar análisis con IA
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+python3 scripts/ai_analysis.py
+# → genera reports/ai_analysis_report.json
+```
+
+### 4. Importar workflow en n8n
+
+1. Abrir n8n (`npx n8n` o tu instancia)
+2. Ir a **Workflows → Import from file**
+3. Seleccionar `n8n/workflow.json`
+4. Actualizar las rutas en los nodos `Execute Command`
+5. Configurar variable `SLACK_WEBHOOK_URL` (opcional)
+6. Activar el workflow
+
+---
+
+## Tipos de inconsistencias detectadas
+
+| Tipo | Severidad | Descripción |
+|------|-----------|-------------|
+| `IN_TRANSIT_STUCK_30D` | CRITICAL/HIGH | En tránsito > 30 días |
+| `STATUS_HISTORY_MISMATCH` | HIGH | Estado actual ≠ último historial |
+| `IN_USE_NO_ASSIGNEE` | HIGH | "In Use" sin responsable |
+| `REPAIR_STUCK` | HIGH/MEDIUM | En reparación > 30 días |
+| `LOCATION_MISMATCH` | MEDIUM | Ubicación ≠ último movimiento |
+| `IN_STOCK_WITH_ASSIGNEE` | MEDIUM | "In Stock" con usuario asignado |
+| `WARRANTY_EXPIRED_ACTIVE` | MEDIUM | Garantía vencida, activo operando |
+
+---
+
+## Resultados sobre el dataset
+
+| Métrica | Valor |
+|---------|-------|
+| Total activos analizados | 120 |
+| Total inconsistencias | 333 |
+| Issues CRITICAL | 32 |
+| Issues HIGH | 123 |
+| Activos en tránsito >30 días | 32 (100% de los en tránsito) |
+| Valor en riesgo (CRITICAL+HIGH) | USD 219,865 |
+
+---
+
+## Uso de IA — Claude (Anthropic)
+
+### Dónde se usa
+
+**`ai_analysis.py`**: Una vez que `diagnosis.py` detecta los síntomas, se envía el reporte a **Claude claude-opus-4-6** para:
+
+1. **Identificar causas raíz sistémicas** — no solo síntomas individuales (ej: "proceso de actualización de ubicación no automatizado")
+2. **Priorizar por impacto** — considera tipo de activo, costo, días transcurridos y ubicación simultáneamente
+3. **Generar recomendaciones accionables** — con esfuerzo estimado y plazo concreto
+4. **Producir un executive summary** — en lenguaje natural para reportar a gerencia
+
+### Por qué IA vs solo reglas
+
+| Enfoque | Qué puede | Qué no puede |
+|---------|-----------|--------------|
+| Reglas (diagnosis.py) | Detectar síntomas exactos, calcular días, comparar campos | Interpretar contexto, priorizar combinaciones complejas, lenguaje natural |
+| Claude AI | Razonar sobre causas raíz, priorizar según múltiples variables, detectar patrones entre issues | Calcular días exactos, comparar registros uno a uno |
+
+El valor de la IA está en que **cruza la información**: sabe que un Laptop de $1,965 en HUB-CL en tránsito 450 días con garantía vencida y sin asignado es más urgente que un Handheld de $700 en Repair 35 días, sin necesidad de reglas de priorización hard-coded.
+
+---
+
+## Métricas de impacto de la solución
+
+### KPI 1 — Reducción de inconsistencias
+
+- **Línea base**: 333 inconsistencias / 120 activos = **2.8 issues por activo**
+- **Target**: < 0.5 issues por activo (83% de reducción)
+- **Cómo medirlo**: ejecutar `diagnosis.py` semanalmente y comparar `total_issues`
+
+### KPI 2 — Tiempo de resolución de desvíos en tránsito
+
+- **Línea base**: 100% de activos en tránsito llevan >30 días (promedio estimado: >300 días)
+- **Target**: 0 activos en tránsito >30 días
+- **Cómo medirlo**: campo `in_transit_over_30d` en el reporte semanal
+
+---
+
+## Propuestas de mejora al proceso
+
+Más allá de la solución técnica, los datos revelan problemas de proceso:
+
+1. **No existe cierre de tránsito automático** — cuando un activo llega a destino, nadie actualiza el estado. Solución: webhook desde el sistema de recepción → actualizar `status` vía API.
+2. **Asignaciones sin validación** — se puede asignar un activo a un usuario sin cambiar su estado a "In Use". Solución: regla de negocio que fuerce el cambio de estado al asignar.
+3. **Garantías no monitoreadas** — nadie revisa proactivamente las fechas de vencimiento. Solución: alerta automática 60 días antes del vencimiento (agregar al workflow n8n).
+
+---
+
+## Variables de entorno
+
+| Variable | Requerida | Descripción |
+|----------|-----------|-------------|
+| `ANTHROPIC_API_KEY` | Sí (para AI) | API key de Anthropic |
+| `REFERENCE_DATE` | No | Fecha de referencia `YYYY-MM-DD` (default: hoy) |
+| `SLACK_WEBHOOK_URL` | No | Webhook para alertas en n8n |

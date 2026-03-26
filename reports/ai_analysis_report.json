@@ -1,0 +1,178 @@
+{
+  "generated_at": "2026-03-26T18:45:00.000000",
+  "reference_date": "2026-03-26",
+  "model": "claude-opus-4-6",
+  "summary": {
+    "total_assets": 120,
+    "total_issues": 333,
+    "severity_breakdown": {
+      "CRITICAL": 32,
+      "HIGH": 123,
+      "MEDIUM": 178,
+      "LOW": 0
+    },
+    "in_transit_total": 32,
+    "in_transit_over_30d": 32,
+    "in_transit_over_15d": 32,
+    "issue_types": {
+      "IN_TRANSIT_STUCK_30D": 32,
+      "REPAIR_STUCK": 29,
+      "STATUS_HISTORY_MISMATCH": 90,
+      "IN_USE_NO_ASSIGNEE": 4,
+      "IN_STOCK_WITH_ASSIGNEE": 28,
+      "LOCATION_MISMATCH": 97,
+      "WARRANTY_EXPIRED_ACTIVE": 53
+    },
+    "at_risk_value_usd": 219865.0
+  },
+  "ai_analysis": {
+    "executive_summary": "El análisis de 120 activos tecnológicos revela una crisis sistémica de trazabilidad: 333 inconsistencias en 2.8 problemas promedio por activo, con USD 219,865 en riesgo. El hallazgo más crítico es que el 100% de los activos en tránsito llevan más de 30 días sin actualización — algunos desde 2022, superando los 1,300 días. Esto no es un problema operativo puntual sino una falla estructural: los procesos de recepción, asignación y movimiento de activos nunca fueron integrados con el sistema de registro. Las 97 inconsistencias de ubicación y las 90 de historial de estado confirman que el sistema refleja una foto desactualizada de la realidad. Sin intervención inmediata, el deterioro silencioso de activos de alto valor continuará escalando.",
+    "root_causes": [
+      {
+        "id": "RC-01",
+        "title": "Ausencia de cierre automático del ciclo de tránsito",
+        "description": "El proceso de recepción física de activos no está conectado al sistema de registro. Cuando un activo llega a destino, nadie actualiza su estado de 'In Transit' a 'In Use' o 'In Stock'. Esto explica los 32 activos críticos con promedios de 900+ días en tránsito — algunos desde mediados de 2022.",
+        "affected_issues": ["IN_TRANSIT_STUCK_30D"],
+        "affected_count": 32,
+        "severity": "CRITICAL"
+      },
+      {
+        "id": "RC-02",
+        "title": "Desincronización entre estado actual y sistema de movimientos",
+        "description": "El campo 'status' en assets.csv y el registro en status_history no se actualizan de forma atómica. Las 90 inconsistencias de STATUS_HISTORY_MISMATCH y las 97 de LOCATION_MISMATCH indican que las actualizaciones se realizan manualmente en sistemas separados, con alta tasa de omisión.",
+        "affected_issues": ["STATUS_HISTORY_MISMATCH", "LOCATION_MISMATCH"],
+        "affected_count": 187,
+        "severity": "HIGH"
+      },
+      {
+        "id": "RC-03",
+        "title": "Falta de validación de negocio en asignaciones",
+        "description": "El sistema permite asignar un activo a un usuario sin forzar el cambio de estado correspondiente, y viceversa: activos en 'In Stock' con asignado (28 casos) y activos 'In Use' sin asignado (4 casos). No existe una regla que vincule ambas tablas transaccionalmente.",
+        "affected_issues": ["IN_USE_NO_ASSIGNEE", "IN_STOCK_WITH_ASSIGNEE"],
+        "affected_count": 32,
+        "severity": "HIGH"
+      },
+      {
+        "id": "RC-04",
+        "title": "Sin alertas proactivas sobre garantías y reparaciones",
+        "description": "Las 53 garantías vencidas en activos operativos y los 29 activos atascados en reparación (>30 días) reflejan ausencia total de monitoreo preventivo. No existe ningún mecanismo que alerte antes de que un activo supere umbrales críticos de tiempo o costo.",
+        "affected_issues": ["WARRANTY_EXPIRED_ACTIVE", "REPAIR_STUCK"],
+        "affected_count": 82,
+        "severity": "MEDIUM"
+      }
+    ],
+    "priority_actions": [
+      {
+        "rank": 1,
+        "action": "Auditoría física urgente de los 32 activos en tránsito crítico",
+        "description": "Realizar un inventario físico inmediato de los 32 activos con IN_TRANSIT_STUCK_30D, especialmente los que superan 800 días. Para cada uno: confirmar ubicación real, actualizar estado en el sistema y determinar si el activo fue recibido, perdido o está en uso sin registro. Priorizar los de mayor costo (USD 1,966 a USD 1,107).",
+        "expected_impact": "Recuperar visibilidad sobre USD 46,900+ en activos de alto valor y cerrar el gap más crítico del inventario.",
+        "effort": "ALTO",
+        "timeframe": "1-2 semanas",
+        "owner": "IT Operations + Logística"
+      },
+      {
+        "rank": 2,
+        "action": "Implementar webhook de cierre de tránsito en el sistema de recepción",
+        "description": "Integrar el sistema de recepción de depósito con la API del tracker. Al registrar la llegada de un activo, disparar automáticamente la actualización de estado, ubicación y fecha en assets.csv y status_history. Esto elimina el problema RC-01 de raíz.",
+        "expected_impact": "Previene el 100% de futuros IN_TRANSIT_STUCK. Elimina la causa raíz de 32 issues CRITICAL.",
+        "effort": "MEDIO",
+        "timeframe": "2-3 semanas",
+        "owner": "Desarrollo de Software"
+      },
+      {
+        "rank": 3,
+        "action": "Agregar validación transaccional en el proceso de asignación",
+        "description": "Implementar regla de negocio: al asignar un activo a un usuario, el sistema debe automáticamente actualizar el estado a 'In Use' y registrar el movimiento. Al desasignar, cambiar a 'In Stock'. Esto elimina los 32 casos de asignación inconsistente.",
+        "expected_impact": "Elimina IN_USE_NO_ASSIGNEE e IN_STOCK_WITH_ASSIGNEE. Reduce STATUS_HISTORY_MISMATCH en ~30%.",
+        "effort": "BAJO",
+        "timeframe": "1 semana",
+        "owner": "Desarrollo de Software"
+      },
+      {
+        "rank": 4,
+        "action": "Activar alertas automáticas por umbrales de tiempo y garantía",
+        "description": "Configurar el workflow n8n para enviar alertas: (a) 60 días antes del vencimiento de garantía, (b) cuando un activo supere 15 días en tránsito, (c) cuando una reparación supere 20 días. Usar el mismo canal Slack ya configurado.",
+        "expected_impact": "Previene la acumulación futura de WARRANTY_EXPIRED_ACTIVE y REPAIR_STUCK. Detección temprana reduce costo de resolución.",
+        "effort": "BAJO",
+        "timeframe": "3 días",
+        "owner": "IT Operations"
+      },
+      {
+        "rank": 5,
+        "action": "Sincronización masiva de ubicaciones desde el sistema de movimientos",
+        "description": "Ejecutar un script de reconciliación batch que tome el último movimiento registrado para cada activo y actualice su campo 'location' en assets.csv. Esto resuelve las 97 inconsistencias de LOCATION_MISMATCH de forma inmediata y establece una línea base limpia.",
+        "expected_impact": "Elimina el 100% de los 97 LOCATION_MISMATCH actuales. Mejora la precisión del inventario de forma inmediata.",
+        "effort": "BAJO",
+        "timeframe": "1 día",
+        "owner": "IT Operations"
+      }
+    ],
+    "issue_classifications": [
+      {
+        "type": "IN_TRANSIT_STUCK_30D",
+        "count": 32,
+        "severity": "CRITICAL",
+        "pattern": "El 100% de activos en tránsito están bloqueados, con promedio estimado >900 días. Concentración en HUB-CL (13), HUB-MX (10) y HUB-AR (9). Indica falla sistémica, no casos aislados.",
+        "business_impact": "Activos de alto valor (promedio USD 1,400) potencialmente inutilizables o perdidos. Riesgo de fraude o pérdida no detectada."
+      },
+      {
+        "type": "LOCATION_MISMATCH",
+        "count": 97,
+        "severity": "HIGH",
+        "pattern": "Issue más frecuente (29% del total). Afecta todos los tipos de activos y ubicaciones por igual, confirmando que el proceso de actualización de ubicación es inexistente o muy deficiente.",
+        "business_impact": "Imposibilita la localización física de activos. Genera ineficiencias operativas al buscar equipos en ubicaciones incorrectas."
+      },
+      {
+        "type": "STATUS_HISTORY_MISMATCH",
+        "count": 90,
+        "severity": "HIGH",
+        "pattern": "27% del total de issues. El estado visible del activo no coincide con su historial real. Indica actualizaciones parciales o fuera de orden en el sistema.",
+        "business_impact": "Decisiones operativas basadas en información incorrecta. Auditorías de inventario no confiables."
+      },
+      {
+        "type": "WARRANTY_EXPIRED_ACTIVE",
+        "count": 53,
+        "severity": "MEDIUM",
+        "pattern": "Activos que siguen operando con garantía vencida. Riesgo latente: cualquier falla genera costo no cubierto.",
+        "business_impact": "Exposición financiera no cuantificada ante fallas de hardware. Sin garantía, el costo de reparación recae 100% en la empresa."
+      },
+      {
+        "type": "REPAIR_STUCK",
+        "count": 29,
+        "severity": "HIGH",
+        "pattern": "29 activos en reparación >30 días. Sin visibilidad del estado real: ¿en taller, en espera de repuestos, o abandonados?",
+        "business_impact": "Capacidad operativa reducida. Costo de oportunidad por activos inmovilizados."
+      },
+      {
+        "type": "IN_STOCK_WITH_ASSIGNEE",
+        "count": 28,
+        "severity": "MEDIUM",
+        "pattern": "Activos marcados como disponibles pero con usuario asignado. Conflicto de datos que puede generar doble asignación.",
+        "business_impact": "Riesgo de asignar el mismo activo a dos usuarios simultáneamente."
+      },
+      {
+        "type": "IN_USE_NO_ASSIGNEE",
+        "count": 4,
+        "severity": "HIGH",
+        "pattern": "Activos en uso sin responsable identificado. Imposible determinar quién tiene el equipo.",
+        "business_impact": "Sin trazabilidad de responsabilidad. En caso de pérdida o daño, no hay responsable identificado."
+      }
+    ],
+    "kpis": {
+      "issues_per_asset": 2.78,
+      "critical_rate_pct": 9.6,
+      "high_rate_pct": 36.9,
+      "transit_resolution_urgency": "CRÍTICA — promedio estimado >900 días bloqueados",
+      "at_risk_per_asset_usd": 1832.21,
+      "target_issues_per_asset": 0.5,
+      "improvement_needed_pct": 82.0
+    },
+    "recommended_kpis_to_track": [
+      "issues_per_asset (target: <0.5 en 90 días)",
+      "in_transit_over_30d (target: 0 en 30 días)",
+      "location_accuracy_pct (target: >95% en 60 días)",
+      "repair_resolution_days_avg (target: <20 días)"
+    ]
+  }
+}
