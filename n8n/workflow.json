@@ -21,18 +21,18 @@
     },
     {
       "parameters": {
-        "command": "cd /path/to/asset-lifecycle-tracker && python3 scripts/diagnosis.py 2>&1"
+        "command": "cd /Users/ext_demayorg/Desktop/asset-lifecycle-tracker && python3 scripts/diagnosis.py 2>&1"
       },
       "id": "node_diagnosis",
       "name": "Run Diagnosis Script",
       "type": "n8n-nodes-base.executeCommand",
       "typeVersion": 1,
       "position": [460, 300],
-      "notes": "Ejecuta el script Python de diagnóstico.\nGenera reports/diagnosis_report.json con todos los issues detectados.\nActualizar la ruta 'cd /path/to/' con la ruta real del proyecto."
+      "notes": "Ejecuta el script Python de diagnóstico.\nGenera reports/diagnosis_report.json con todos los issues detectados."
     },
     {
       "parameters": {
-        "command": "cd /path/to/asset-lifecycle-tracker && python3 scripts/ai_analysis.py 2>&1"
+        "command": "cd /Users/ext_demayorg/Desktop/asset-lifecycle-tracker && python3 scripts/ai_analysis.py 2>&1"
       },
       "id": "node_ai",
       "name": "Run AI Analysis (Claude)",
@@ -43,7 +43,7 @@
     },
     {
       "parameters": {
-        "filePath": "/path/to/asset-lifecycle-tracker/reports/ai_analysis_report.json"
+        "filePath": "/Users/ext_demayorg/Desktop/asset-lifecycle-tracker/reports/ai_analysis_report.json"
       },
       "id": "node_read_report",
       "name": "Read Analysis Report",
@@ -54,12 +54,12 @@
     },
     {
       "parameters": {
-        "jsCode": "// Parsea el reporte y extrae métricas clave para el router\nconst raw = $input.first().binary?.data\n  ? Buffer.from($input.first().binary.data, 'base64').toString()\n  : $input.first().json?.fileContent || '{}';\n\nlet report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  report = { summary: { severity_breakdown: { CRITICAL: 0, HIGH: 0 }, total_issues: 0 } };\n}\n\nconst summary = report.summary || {};\nconst severity = summary.severity_breakdown || {};\nconst ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'No AI analysis available',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
+        "functionCode": "// Parsea el reporte y extrae métricas clave para el router\nvar raw = '';\nif (items[0].binary && items[0].binary.data) {\n  raw = Buffer.from(items[0].binary.data, 'base64').toString();\n} else if (items[0].json && items[0].json.fileContent) {\n  raw = items[0].json.fileContent;\n}\n\nvar report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  report = { summary: { severity_breakdown: { CRITICAL: 0, HIGH: 0 }, total_issues: 0 } };\n}\n\nvar summary = report.summary || {};\nvar severity = summary.severity_breakdown || {};\nvar ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'No AI analysis available',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
       },
       "id": "node_parse",
       "name": "Parse & Extract Metrics",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
       "position": [1120, 300],
       "notes": "Extrae las métricas clave del reporte JSON.\nDecide si hay issues críticos para el routing condicional."
     },
@@ -100,16 +100,16 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [1560, 180],
-      "notes": "Envía alerta al canal de Slack (o cualquier webhook).\nConfigurar SLACK_WEBHOOK_URL en las variables de n8n.\nPor qué Slack: notificación en tiempo real sin necesidad de revisar reportes manualmente."
+      "notes": "Envía alerta al canal de Slack (o cualquier webhook).\nConfigurar SLACK_WEBHOOK_URL en las variables de n8n."
     },
     {
       "parameters": {
-        "jsCode": "// Solo logea el resultado cuando no hay críticos\nconst d = $input.first().json;\nconsole.log(`[${d.generated_at}] Routine check: ${d.total_issues} issues, no CRITICAL`);\nreturn [{ json: { status: 'ok', message: `${d.total_issues} issues found, none critical`, ...d } }];"
+        "functionCode": "// Solo logea el resultado cuando no hay críticos\nvar d = items[0].json;\nconsole.log('[' + d.generated_at + '] Routine check: ' + d.total_issues + ' issues, no CRITICAL');\nreturn [{ json: { status: 'ok', message: d.total_issues + ' issues found, none critical', generated_at: d.generated_at, total_issues: d.total_issues } }];"
       },
       "id": "node_log",
       "name": "Log Routine Result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
       "position": [1560, 420],
       "notes": "No hay issues críticos — solo loguea el resultado.\nEl reporte sigue disponible en reports/ para revisión manual."
     }
