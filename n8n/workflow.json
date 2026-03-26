@@ -21,18 +21,20 @@
     },
     {
       "parameters": {
-        "filePath": "/Users/ext_demayorg/Desktop/asset-lifecycle-tracker/reports/ai_analysis_report.json"
+        "method": "GET",
+        "url": "https://raw.githubusercontent.com/deyber1974/asset-lifecycle-tracker/main/reports/ai_analysis_report.json",
+        "options": {}
       },
       "id": "node_read_report",
       "name": "Read Analysis Report",
-      "type": "n8n-nodes-base.readWriteFile",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [460, 300],
-      "notes": "Lee el reporte JSON generado por los scripts Python.\nEl archivo se actualiza diariamente por cron antes de las 9am."
+      "notes": "Lee el reporte JSON desde GitHub (repo público).\nCada vez que se corre diagnosis.py + ai_analysis.py y se hace git push, este nodo lee la versión más reciente automáticamente."
     },
     {
       "parameters": {
-        "functionCode": "// Parsea el reporte y extrae métricas clave para el router\nvar raw = '';\nif (items[0].binary && items[0].binary.data) {\n  raw = Buffer.from(items[0].binary.data, 'base64').toString();\n} else if (items[0].json && items[0].json.fileContent) {\n  raw = items[0].json.fileContent;\n}\n\nvar report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  report = { summary: { severity_breakdown: { CRITICAL: 0, HIGH: 0 }, total_issues: 0 } };\n}\n\nvar summary = report.summary || {};\nvar severity = summary.severity_breakdown || {};\nvar ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'Sin análisis IA disponible',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
+        "functionCode": "// El HTTP Request ya devuelve el JSON parseado en items[0].json\nvar report = items[0].json;\n\nvar summary = report.summary || {};\nvar severity = summary.severity_breakdown || {};\nvar ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'Sin análisis IA disponible',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
       },
       "id": "node_parse",
       "name": "Parse & Extract Metrics",
