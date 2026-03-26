@@ -34,14 +34,27 @@
     },
     {
       "parameters": {
-        "functionCode": "// El HTTP Request ya devuelve el JSON parseado en items[0].json\nvar report = items[0].json;\n\nvar summary = report.summary || {};\nvar severity = summary.severity_breakdown || {};\nvar ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'Sin análisis IA disponible',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "has_critical",       "value": "={{ $json.summary.severity_breakdown.CRITICAL > 0 }}", "type": "boolean" },
+            { "id": "2", "name": "critical_count",     "value": "={{ $json.summary.severity_breakdown.CRITICAL }}", "type": "number" },
+            { "id": "3", "name": "high_count",         "value": "={{ $json.summary.severity_breakdown.HIGH }}", "type": "number" },
+            { "id": "4", "name": "total_issues",       "value": "={{ $json.summary.total_issues }}", "type": "number" },
+            { "id": "5", "name": "at_risk_usd",        "value": "={{ $json.summary.at_risk_value_usd }}", "type": "number" },
+            { "id": "6", "name": "in_transit_30d",     "value": "={{ $json.summary.in_transit_over_30d }}", "type": "number" },
+            { "id": "7", "name": "executive_summary",  "value": "={{ $json.ai_analysis.executive_summary }}", "type": "string" },
+            { "id": "8", "name": "reference_date",     "value": "={{ $json.reference_date }}", "type": "string" },
+            { "id": "9", "name": "generated_at",       "value": "={{ $json.generated_at }}", "type": "string" }
+          ]
+        },
+        "options": {}
       },
       "id": "node_parse",
       "name": "Parse & Extract Metrics",
-      "type": "n8n-nodes-base.function",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
       "position": [680, 300],
-      "notes": "Extrae las métricas clave del reporte JSON.\nDecide si hay issues críticos para el routing condicional."
+      "notes": "Extrae las métricas clave del reporte JSON usando expresiones.\nDecide si hay issues críticos para el routing condicional."
     },
     {
       "parameters": {
@@ -83,15 +96,13 @@
       "notes": "Envía alerta al canal de Slack.\nConfigurar SLACK_WEBHOOK_URL en las variables de n8n."
     },
     {
-      "parameters": {
-        "functionCode": "var d = items[0].json;\nconsole.log('[' + d.generated_at + '] Routine check: ' + d.total_issues + ' issues, no CRITICAL');\nreturn [{ json: { status: 'ok', message: d.total_issues + ' issues encontrados, ninguno crítico', generated_at: d.generated_at, total_issues: d.total_issues } }];"
-      },
+      "parameters": {},
       "id": "node_log",
       "name": "Log Routine Result",
-      "type": "n8n-nodes-base.function",
+      "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [1120, 420],
-      "notes": "No hay issues críticos — solo loguea el resultado.\nEl reporte sigue disponible en reports/ para revisión manual."
+      "notes": "No hay issues críticos — el workflow termina aquí sin alertar.\nEl reporte sigue disponible en GitHub para revisión manual."
     }
   ],
   "connections": {
