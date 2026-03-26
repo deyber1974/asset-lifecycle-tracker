@@ -17,29 +17,7 @@
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
       "position": [240, 300],
-      "notes": "Ejecuta el análisis automáticamente cada día hábil a las 9am.\nPor qué: detectar desvíos temprano reduce el tiempo de resolución.\nSe puede ajustar a diario si el volumen de movimientos lo requiere."
-    },
-    {
-      "parameters": {
-        "command": "cd /Users/ext_demayorg/Desktop/asset-lifecycle-tracker && python3 scripts/diagnosis.py 2>&1"
-      },
-      "id": "node_diagnosis",
-      "name": "Run Diagnosis Script",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [460, 300],
-      "notes": "Ejecuta el script Python de diagnóstico.\nGenera reports/diagnosis_report.json con todos los issues detectados."
-    },
-    {
-      "parameters": {
-        "command": "cd /Users/ext_demayorg/Desktop/asset-lifecycle-tracker && python3 scripts/ai_analysis.py 2>&1"
-      },
-      "id": "node_ai",
-      "name": "Run AI Analysis (Claude)",
-      "type": "n8n-nodes-base.executeCommand",
-      "typeVersion": 1,
-      "position": [680, 300],
-      "notes": "Llama a Claude API para clasificar y priorizar los issues.\nRequiere ANTHROPIC_API_KEY en el entorno del proceso n8n.\nGenera reports/ai_analysis_report.json con el análisis enriquecido."
+      "notes": "Ejecuta el monitoreo automáticamente cada día hábil a las 9am.\nLos scripts Python (diagnosis.py + ai_analysis.py) corren via cron del sistema operativo y generan el reporte antes de esta hora."
     },
     {
       "parameters": {
@@ -49,18 +27,18 @@
       "name": "Read Analysis Report",
       "type": "n8n-nodes-base.readWriteFile",
       "typeVersion": 1,
-      "position": [900, 300],
-      "notes": "Lee el JSON final para procesarlo en los nodos siguientes."
+      "position": [460, 300],
+      "notes": "Lee el reporte JSON generado por los scripts Python.\nEl archivo se actualiza diariamente por cron antes de las 9am."
     },
     {
       "parameters": {
-        "functionCode": "// Parsea el reporte y extrae métricas clave para el router\nvar raw = '';\nif (items[0].binary && items[0].binary.data) {\n  raw = Buffer.from(items[0].binary.data, 'base64').toString();\n} else if (items[0].json && items[0].json.fileContent) {\n  raw = items[0].json.fileContent;\n}\n\nvar report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  report = { summary: { severity_breakdown: { CRITICAL: 0, HIGH: 0 }, total_issues: 0 } };\n}\n\nvar summary = report.summary || {};\nvar severity = summary.severity_breakdown || {};\nvar ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'No AI analysis available',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
+        "functionCode": "// Parsea el reporte y extrae métricas clave para el router\nvar raw = '';\nif (items[0].binary && items[0].binary.data) {\n  raw = Buffer.from(items[0].binary.data, 'base64').toString();\n} else if (items[0].json && items[0].json.fileContent) {\n  raw = items[0].json.fileContent;\n}\n\nvar report;\ntry {\n  report = JSON.parse(raw);\n} catch(e) {\n  report = { summary: { severity_breakdown: { CRITICAL: 0, HIGH: 0 }, total_issues: 0 } };\n}\n\nvar summary = report.summary || {};\nvar severity = summary.severity_breakdown || {};\nvar ai = report.ai_analysis || {};\n\nreturn [{\n  json: {\n    has_critical: (severity.CRITICAL || 0) > 0,\n    critical_count: severity.CRITICAL || 0,\n    high_count: severity.HIGH || 0,\n    total_issues: summary.total_issues || 0,\n    at_risk_usd: summary.at_risk_value_usd || 0,\n    in_transit_30d: summary.in_transit_over_30d || 0,\n    executive_summary: ai.executive_summary || 'Sin análisis IA disponible',\n    priority_actions: (ai.priority_actions || []).slice(0, 3),\n    reference_date: report.reference_date,\n    generated_at: report.generated_at\n  }\n}];"
       },
       "id": "node_parse",
       "name": "Parse & Extract Metrics",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
-      "position": [1120, 300],
+      "position": [680, 300],
       "notes": "Extrae las métricas clave del reporte JSON.\nDecide si hay issues críticos para el routing condicional."
     },
     {
@@ -78,7 +56,7 @@
       "name": "Has Critical Issues?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [1340, 300],
+      "position": [900, 300],
       "notes": "Enruta según si existen issues CRITICAL.\nTrue → alerta inmediata al equipo.\nFalse → solo log / reporte de rutina."
     },
     {
@@ -99,29 +77,23 @@
       "name": "Send Critical Alert (Slack/Webhook)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [1560, 180],
-      "notes": "Envía alerta al canal de Slack (o cualquier webhook).\nConfigurar SLACK_WEBHOOK_URL en las variables de n8n."
+      "position": [1120, 180],
+      "notes": "Envía alerta al canal de Slack.\nConfigurar SLACK_WEBHOOK_URL en las variables de n8n."
     },
     {
       "parameters": {
-        "functionCode": "// Solo logea el resultado cuando no hay críticos\nvar d = items[0].json;\nconsole.log('[' + d.generated_at + '] Routine check: ' + d.total_issues + ' issues, no CRITICAL');\nreturn [{ json: { status: 'ok', message: d.total_issues + ' issues found, none critical', generated_at: d.generated_at, total_issues: d.total_issues } }];"
+        "functionCode": "var d = items[0].json;\nconsole.log('[' + d.generated_at + '] Routine check: ' + d.total_issues + ' issues, no CRITICAL');\nreturn [{ json: { status: 'ok', message: d.total_issues + ' issues encontrados, ninguno crítico', generated_at: d.generated_at, total_issues: d.total_issues } }];"
       },
       "id": "node_log",
       "name": "Log Routine Result",
       "type": "n8n-nodes-base.function",
       "typeVersion": 1,
-      "position": [1560, 420],
+      "position": [1120, 420],
       "notes": "No hay issues críticos — solo loguea el resultado.\nEl reporte sigue disponible en reports/ para revisión manual."
     }
   ],
   "connections": {
     "Schedule Trigger (9am Mon-Fri)": {
-      "main": [[{ "node": "Run Diagnosis Script", "type": "main", "index": 0 }]]
-    },
-    "Run Diagnosis Script": {
-      "main": [[{ "node": "Run AI Analysis (Claude)", "type": "main", "index": 0 }]]
-    },
-    "Run AI Analysis (Claude)": {
       "main": [[{ "node": "Read Analysis Report", "type": "main", "index": 0 }]]
     },
     "Read Analysis Report": {
@@ -141,6 +113,6 @@
     "executionOrder": "v1"
   },
   "meta": {
-    "description": "Workflow de automatización para el Asset Lifecycle Tracker. Ejecuta el diagnóstico de activos diariamente, llama a Claude AI para análisis, y envía alertas si hay issues críticos. Requiere: Python 3.9+, ANTHROPIC_API_KEY, SLACK_WEBHOOK_URL (opcional)."
+    "description": "Workflow de monitoreo para el Asset Lifecycle Tracker. Lee el reporte generado por los scripts Python (vía cron del sistema), evalúa si hay issues críticos y envía alertas Slack si los hay. Los scripts diagnosis.py y ai_analysis.py corren independientemente antes de las 9am."
   }
 }
