@@ -556,7 +556,11 @@ def export_dashboard(ws: gspread.Worksheet, report: dict, spreadsheet):
     for i in range(len(top10)):
         r = top10_start_row + 2 + i
         row_bg = C["critical_bg"] if i % 2 == 0 else C["white"]
-        bf(f"A{r}:H{r}", {"backgroundColor": row_bg, **cell_borders})
+        bf(f"A{r}:H{r}", {
+            "backgroundColor": row_bg,
+            "textFormat": {"foregroundColor": C["dark_text"], "fontSize": 10},
+            **cell_borders,
+        })
         bf(f"G{r}", {"textFormat": {"bold": True, "foregroundColor": C["critical"]}})
         bf(f"D{r}", {"horizontalAlignment": "CENTER",
                      "textFormat": {"bold": True, "foregroundColor": C["navy"]}})
