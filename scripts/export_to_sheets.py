@@ -275,9 +275,10 @@ def export_dashboard(ws: gspread.Worksheet, report: dict, spreadsheet):
         }
     }]})
 
-    # Top 10 CRITICAL por costo
+    # Top 10 CRITICAL por costo (solo issues con asset_id válido)
     top10 = sorted(
-        [i for i in report["issues"] if i.get("severity") == "CRITICAL"],
+        [i for i in report["issues"]
+         if i.get("severity") == "CRITICAL" and i.get("asset_id")],
         key=lambda x: -x.get("cost_usd", 0)
     )[:10]
 
@@ -855,7 +856,7 @@ def main():
         print(f"  Exportando '{title}'...")
         ws = get_or_create_sheet(spreadsheet, title)
         fn(ws)
-        time.sleep(8)  # evitar rate limit de Sheets API (300 req/min)
+        time.sleep(15)  # evitar rate limit de Sheets API (300 req/min)
 
     print(f"\nSheet actualizado exitosamente.")
     print(f"URL: https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}")
